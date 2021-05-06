@@ -166,7 +166,7 @@ class CommandBase: AzSKRoot {
 		}
 
 		#auto close passed bugs
-			if ($this.InvocationContext.BoundParameters["AutoBugLog"] -or $this.InvocationContext.BoundParameters["AutoCloseBugs"]) {
+			if ($this.InvocationContext.BoundParameters["AutoBugLog"]) {
 			if (([PartialScanManager]::ControlResultsWithBugSummary| Measure-Object).Count -gt 0)
 			{
 				$methodResult = [PartialScanManager]::ControlResultsWithBugSummary

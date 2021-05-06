@@ -203,12 +203,6 @@ function Get-AzSKADOSecurityStatus
 		[Alias("abl")]
 		[string] $AutoBugLog = [BugLogForControls]::All,
 
-
-		[switch]
-		[Parameter(HelpMessage = "Switch to auto-close bugs after the scan.")]
-		[Alias("acb")]
-		$AutoCloseBugs,
-
 		[string]
 		[Parameter(Mandatory=$false)]
 		[Alias("apt")]
