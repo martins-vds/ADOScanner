@@ -172,10 +172,10 @@
   "ProjectToStoreAttestation": "",
   "EnforceApprovedException": true,
   "ApprovedExceptionSettings": {
-    "ControlsList": ["ADO_ServiceConnection_AuthZ_Dont_Grant_All_Pipelines_Access"],
+    "ControlsList": ["ADO_ServiceConnection_AuthZ_Dont_Grant_All_Pipelines_Access", "ADO_ServiceConnection_SI_Dont_Share_Across_Projects"],
     "InvalidatePreviousAttestations": false,
-    "ApprovedExceptionPromptMessage": "",
-    "NonApprovedExceptionPromptMessage": "",
+  "ApprovedExceptionPromptMessage": "Please create an ADO entry using the template https://aka.ms/adoscanner/msd/exception and enter the task id as approved exception id below.",
+  "NonApprovedExceptionPromptMessage": "Please create an ADO entry using the template at https://aka.ms/adoscanner/msd/bydesign and enter the task id as attestation id below.",
     "DefaultPromptMessage": "Refer the docs https://github.com/azsk/ADOScanner-docs to fetch the exception id."
   },
   "IsAllowLongRunningScan": true,
