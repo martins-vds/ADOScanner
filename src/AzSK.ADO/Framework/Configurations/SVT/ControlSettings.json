@@ -170,12 +170,12 @@
   "AttestationBranch": "",
   "EnableMultiProjectAttestation": false,
   "ProjectToStoreAttestation": "",
-  "EnforceApprovedException": false,
+  "EnforceApprovedException": true,
   "ApprovedExceptionSettings": {
-    "ControlsList": [],
+    "ControlsList": ["ADO_ServiceConnection_AuthZ_Dont_Grant_All_Pipelines_Access"],
     "InvalidatePreviousAttestations": false,
     "ApprovedExceptionPromptMessage": "",
-    "ByDesignExceptionPromptMessage": "",
+    "NonApprovedExceptionPromptMessage": "",
     "DefaultPromptMessage": "Refer the docs https://github.com/azsk/ADOScanner-docs to fetch the exception id."
   },
   "IsAllowLongRunningScan": true,
