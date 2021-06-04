@@ -254,14 +254,23 @@ class BugLogHelper {
             
             $azTableBugInfo = $item.value
             if ($azTableBugInfo -and $azTableBugInfo.count -gt 0) {
-                foreach ($row in $azTableBugInfo) {
-                    if($this.CloseBug($row.ADOBugId, $row.projectName) )
-                    {
-                        $isDeleted = $this.DeleteTableEntity($tableName, $row.PartitionKey , $row.ADOBugId);
-                        if ($isDeleted -eq $true) {
-                            $this.AddDataInTable($tableName, $row.PartitionKey, $row.ADOBugId, $row.projectName, "Y");
+                $adoBugId = @();
+                $adoBugId += $azTableBugInfo.ADOBugId;
+                $adoClosedBugResponse = $this.CloseBugBulk($adoBugId);
+
+                if($adoClosedBugResponse)
+                {
+                    foreach ($row in $adoClosedBugResponse) {
+                        if($row.code -eq 200 )
+                        {
+                            $id = ($row.body | ConvertFrom-Json).id
+                            $tableData = $azTableBugInfo | Where {$_.ADOBugId -eq $id} | Select PartitionKey, projectName
+                            $isDeleted = $this.DeleteTableEntity($tableName, $tableData.partitionKey , $id);
+                            if ($isDeleted -eq $true) {
+                                $this.AddDataInTable($tableName, $tableData.partitionKey, $id, $tableData.projectName, "Y");
+                            }
+                           #$this.UpdateTableEntity($tableName, $row.ADOScannerHashId, $row.ADOBugId, $row.projectName);
                         }
-                       #$this.UpdateTableEntity($tableName, $row.ADOScannerHashId, $row.ADOBugId, $row.projectName);
                     }
                 } 
             }
@@ -274,7 +283,7 @@ class BugLogHelper {
         }
         
         return $true;
-    } 
+    }  
 
     hidden [string] GetTableName()
     {
@@ -300,5 +309,42 @@ class BugLogHelper {
         }
     }
 
+    #function to close an active bugs in bulk
+
+    hidden [object] CloseBugBulk([string[]] $ids) 
+    {
+        try {
+            $closeBugTemplate = @();
+            foreach ($id in $ids) {
+                $closeBugTemplate += [PSCustomObject] @{ method = 'PATCH'; uri = "/_apis/wit/workitems/$($id)?api-version=4.1"; headers = @{"Content-Type" = 'application/json-patch+json'};
+                body = @(@{op = "add"; "path"= "/fields/System.State"; "value"= "Closed"})
+                }
+            }
+
+            if ($closeBugTemplate.count -gt 0) {
+                $body = $null;
+                if ($closeBugTemplate.count -eq 1) {
+                    $body = "[$($closeBugTemplate | ConvertTo-Json -depth 10)]"
+                }
+                else {
+                    $body = $closeBugTemplate | ConvertTo-Json -depth 10  
+                }
+
+                $uri = 'https://{0}.visualstudio.com/_apis/wit/$batch?api-version=4.1' -f $this.OrganizationName
+                $header = [WebRequestHelper]::GetAuthHeaderFromUriPatch($uri)
+                $adoResult = Invoke-RestMethod -Uri $uri -Method Patch -ContentType "application/json" -Headers $header -Body $body
+                if ($adoResult -and $adoResult.count -gt 0) {
+                    return $adoResult.value;
+                }
+            }
+            return $false;
+        }
+
+        catch {
+            Write-Host $_
+            Write-Host "Could not close the bug." -ForegroundColor Red
+            return $false
+        }
+    }
 
 }

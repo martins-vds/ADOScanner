@@ -635,7 +635,9 @@ class WritePsConsole: FileOutputBase
 
 			
 		}
-
+        #Clearing the static variables
+        [PartialScanManager]::ControlResultsWithBugSummary = @();
+        [PartialScanManager]::CollatedBugSummaryCount = @();
 	}
 
 
