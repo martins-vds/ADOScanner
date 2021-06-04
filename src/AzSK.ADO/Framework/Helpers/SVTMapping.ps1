@@ -76,6 +76,24 @@ class SVTMapping
 			ClassName = "VariableGroup";
 			JsonFileName = "ADO.VariableGroup.json";
 			ResourceTypeName = "VariableGroup";
+        },
+		[ResourceTypeMapping]@{
+            ResourceType = "ADO.Artifact";
+			ClassName = "CommonClsForControlScan";
+			JsonFileName = "ADO.CommonConfigForControlScan.json";
+			ResourceTypeName = "Artifact";
+        },
+		[ResourceTypeMapping]@{
+            ResourceType = "ADO.Repository";
+			ClassName = "CommonClsForControlScan";
+			JsonFileName = "ADO.CommonConfigForControlScan.json";
+			ResourceTypeName = "Repository";
+        },
+		[ResourceTypeMapping]@{
+            ResourceType = "ADO.Feed";
+			ClassName = "CommonClsForControlScan";
+			JsonFileName = "ADO.CommonConfigForControlScan.json";
+			ResourceTypeName = "Feed";
         }
 	)
 }

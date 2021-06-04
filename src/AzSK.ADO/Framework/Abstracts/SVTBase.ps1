@@ -241,7 +241,7 @@ class SVTBase: AzSKRoot
 	hidden [SVTEventContext] CreateSVTEventContextObject()
 	{
 		return [SVTEventContext]@{
-			FeatureName = $this.SVTConfig.FeatureName;
+			FeatureName = $this.ResourceContext.ResourceTypeName #$this.SVTConfig.FeatureName; #TODO: $this.ResourceContext.ResourceTypeName bcz feature and rtn is same and feature name is coming from control.json file, in case of generic it will have generic name
 			Metadata = [Metadata]@{
 				Reference = $this.SVTConfig.Reference;
 			};
@@ -380,6 +380,7 @@ class SVTBase: AzSKRoot
 
 	[void] PostFeatureControlTelemetry()
 	{
+		#TODO: need to filter FeatureApplicableControls and ResourceObject.Controls
 		#todo add check for latest module version
 		if($this.RunningLatestPSModule -and ($this.FeatureApplicableControls | Measure-Object).Count -gt 0)
 		{
@@ -424,7 +425,9 @@ class SVTBase: AzSKRoot
 	hidden [ControlItem[]] GetApplicableControls()
 	{
 		#Lazy load the list of the applicable controls
-		if($null -eq $this.ApplicableControls)
+		#TODO: if applicablecontrol is already there in singleton object case, then need to filter again for different resourcetype
+		#second condition (in case of singleton) ApplicableControls will not empty for second resource scan in and check if resource type is different 
+		if($null -eq $this.ApplicableControls -or ($this.ApplicableControls -and !($this.ApplicableControls[0].ControlID.StartsWith("ADO_"+$this.ResourceContext.ResourceTypeName+"_")) ) )
 		{
 			$this.ApplicableControls = @();
 			$this.FeatureApplicableControls = @();
@@ -534,6 +537,12 @@ class SVTBase: AzSKRoot
 			#this filtering has been done as the first step it self;
 			#$this.ApplicableControls += $this.ApplyServiceFilters($filteredControls);
 			
+		}
+		#TODO: filter control for generic common control 
+		if ($this.SVTConfig.FeatureName -eq "CommonConfigForControlScan") {
+			$controlstoscan = @();
+			$controlstoscan += $this.ApplicableControls | Where {$_.ControlID.StartsWith("ADO_"+$this.ResourceContext.ResourceTypeName+"_")};
+			$this.ApplicableControls = $controlstoscan;
 		}
 		return $this.ApplicableControls;
 	}
