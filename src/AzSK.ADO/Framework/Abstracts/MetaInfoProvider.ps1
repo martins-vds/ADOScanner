@@ -14,6 +14,7 @@ class MetaInfoProvider {
     hidden $agtPoolSTDetails = @{};
     hidden $varGroupSTDetails = @{};
     hidden $serviceTreeDetails = @{};
+    hidden $reposSTDetails = @{};
     
     #Variable to check whether ST file is present in policy, if ST file is not present then set them to false so for next resource don't call policy server to fetch this file
     hidden [bool] $checkBuildSTFileOnServer = $true;	
@@ -95,6 +96,7 @@ class MetaInfoProvider {
             $svcConnList = @();
             $varGroupList = @();
             $agentPoolList = @();
+            $reposList = @();
 
             if ($this.buildSTDetails.ContainsKey($projectName)) {
                 $buildList += $this.buildSTDetails."$projectName".Data | Where-Object { ($_.serviceId -eq $svcId) -and ($_.projectName -eq $projectName) }
@@ -110,7 +112,10 @@ class MetaInfoProvider {
             }
             if ($this.varGroupSTDetails.ContainsKey($projectName)) {
                 $varGroupList += $this.varGroupSTDetails."$projectName".Data | Where-Object { ($_.serviceId -eq $svcId) -and ($_.projectName -eq $projectName) }
-            } 
+            }
+            if ($this.reposSTDetails.ContainsKey($projectName)) {
+                $reposList += $this.reposSTDetails."$projectName".Data | Where-Object { ($_.serviceId -eq $svcId) -and ($_.projectName -eq $projectName) }
+            }
             
             $rsrcList = @{
                 Builds = $buildList
@@ -118,6 +123,7 @@ class MetaInfoProvider {
                 ServiceConnections = $svcConnList
                 AgentPools = $agentPoolList
                 VariableGroups = $varGroupList
+                Repositories = $reposList
             }
 
         }
@@ -188,6 +194,10 @@ class MetaInfoProvider {
             #$this.serviceTreeDetails = $resourceList;
             $this.serviceTreeDetails.add($projectName, $resourceList);
         }
+        elseif ($resourceTypeName -eq "Repository") {
+            #$this.buildSTDetails = $resourceList;
+            $this.reposSTDetails.add($projectName, $resourceList);
+        }
     }
 
     #Loading local org policy ST files based on supplied resource type, 
@@ -229,6 +239,15 @@ class MetaInfoProvider {
 		{
 			if (!$this.varGroupSTDetails.ContainsKey("$projectName")) {
                 $this.varGroupSTDetails.add($projectName, [ConfigurationManager]::LoadServerConfigFile("$projectName\VariableGroupSTData.json"));
+                
+            }
+        
+        }
+
+        if ($ResourceTypeName -in ([ResourceTypeName]::Repository, [ResourceTypeName]::All))
+		{
+			if (!$this.reposSTDetails.ContainsKey("$projectName")) {
+                $this.reposSTDetails.add($projectName, [ConfigurationManager]::LoadServerConfigFile("$projectName\ReposSTData.json"));
                 
             }
         
@@ -286,6 +305,14 @@ class MetaInfoProvider {
             if ($varGroupSTData) 
             {
                 $serviceTreeInfo = $this.GetDataFromServiceTree($varGroupSTData.serviceID, $projectName);
+            }
+        }
+        elseif(($resourceTypeName -eq "Repository") -and $this.reposSTDetails -and $this.reposSTDetails.ContainsKey("$projectName") -and [Helpers]::CheckMember($this.reposSTDetails."$projectName", "Data"))
+        {
+            $repoSTData = $this.reposSTDetails."$projectName".Data | Where-Object { $_.repoID -eq $rscId -and $_.projectName -eq $projectName}; 
+            if ($repoSTData) 
+            {
+                $serviceTreeInfo = $this.GetDataFromServiceTree($repoSTData.serviceID, $projectName);
             }
         }
 

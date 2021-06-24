@@ -8,19 +8,22 @@ class AzSKADOServiceMapping: CommandBase
     [string] $ProjectId
     [string] $BuildMappingsFilePath
     [string] $ReleaseMappingsFilePath
+    [string] $ReposMappingsFilePath
     [string] $MappingType
     [string] $OutputFolderPath
     $BuildSTDetails = @();
     $ReleaseSTDetails =@();
+    $ReposSTDetails =@();
 
 
-	AzSKADOServiceMapping([string] $organizationName, [string] $projectName, [string] $buildFileLocation, [string] $releaseFileLocation, [string] $mappingType, [InvocationInfo] $invocationContext): 
+	AzSKADOServiceMapping([string] $organizationName, [string] $projectName, [string] $buildFileLocation, [string] $releaseFileLocation, [string] $reposFileLocation,[string] $mappingType, [InvocationInfo] $invocationContext): 
         Base($organizationName, $invocationContext) 
     { 
         $this.OrgName = $organizationName
         $this.ProjectName = $projectName
         $this.BuildMappingsFilePath = $buildFileLocation
         $this.ReleaseMappingsFilePath = $releaseFileLocation
+        $this.ReposMappingsFilePath = $reposFileLocation
         $this.MappingType = $MappingType
 	}
 	
@@ -43,6 +46,9 @@ class AzSKADOServiceMapping: CommandBase
                     $this.FetchVarGrpMapping();
                 }
             }
+        }
+        if(![string]::IsNullOrWhiteSpace($this.ReposMappingsFilePath) -and(Test-Path $this.ReposMappingsFilePath)) {
+            $this.GetRepositoryMapping();
         }
 		[MessageData[]] $returnMsgs = @();
 		$returnMsgs += [MessageData]::new("Returning service mappings.");
@@ -72,6 +78,19 @@ class AzSKADOServiceMapping: CommandBase
         }
         $this.ExportObjToJsonFile($this.ReleaseSTDetails, 'ReleaseSTData.json');
 
+    }
+
+    hidden GetRepositoryMapping() {  
+        $this.ReposSTDetails = Get-content $this.ReposMappingsFilePath | ConvertFrom-Json
+        if ([Helpers]::CheckMember($this.ReposSTDetails, "data") -and ($this.ReposSTDetails.data | Measure-Object).Count -gt 0)
+        {
+            $this.ReposSTDetails.data = $this.ReposSTDetails.data | where-object {$_.ProjectName -eq $this.ProjectName}
+            if (($this.ReposSTDetails.data | Measure-Object).Count -gt 0)
+            {
+                $this.ProjectId = $this.ReposSTDetails.data[0].projectId
+            }
+        }
+        $this.ExportObjToJsonFile($this.ReposSTDetails, 'ReposSTData.json');
     }
 
     hidden ExportObjToJsonFile($serviceMapping, $fileName) {  
@@ -223,59 +242,64 @@ class AzSKADOServiceMapping: CommandBase
         $variableGroupSTMapping = @{
             data = @();
         };
-
-        $releaseDefnURL = ("https://vsrm.dev.azure.com/{0}/{1}/_apis/release/definitions?api-version=6.0" +$topNQueryString) -f $($this.OrgName), $this.ProjectName;
-        $releaseDefnsObj = [WebRequestHelper]::InvokeGetWebRequest($releaseDefnURL);
+        
+        try {
+            $releaseDefnURL = ("https://vsrm.dev.azure.com/{0}/{1}/_apis/release/definitions?api-version=6.0" +$topNQueryString) -f $($this.OrgName), $this.ProjectName;
+            $releaseDefnsObj = [WebRequestHelper]::InvokeGetWebRequest($releaseDefnURL);
           
-        if (([Helpers]::CheckMember($releaseDefnsObj, "count") -and $releaseDefnsObj[0].count -gt 0) -or (($releaseDefnsObj | Measure-Object).Count -gt 0 -and [Helpers]::CheckMember($releaseDefnsObj[0], "name"))) {
-            
-            $this.PublishCustomMessage(([Constants]::DoubleDashLine))
-            $this.PublishCustomMessage("Generating service mappings of variable group using release for project [$($this.ProjectName)]...")
-            $this.PublishCustomMessage("Total mappings to be evaluated:  $(($releaseDefnsObj | Measure-Object).Count)")
-            $counter = 0
+            if (([Helpers]::CheckMember($releaseDefnsObj, "count") -and $releaseDefnsObj[0].count -gt 0) -or (($releaseDefnsObj | Measure-Object).Count -gt 0 -and [Helpers]::CheckMember($releaseDefnsObj[0], "name"))) {
+                
+                $this.PublishCustomMessage(([Constants]::DoubleDashLine))
+                $this.PublishCustomMessage("Generating service mappings of variable group using release for project [$($this.ProjectName)]...")
+                $this.PublishCustomMessage("Total mappings to be evaluated:  $(($releaseDefnsObj | Measure-Object).Count)")
+                $counter = 0
 
-            foreach ($relDef in $releaseDefnsObj) {
+                foreach ($relDef in $releaseDefnsObj) {
 
-                $counter++
-                Write-Progress -Activity 'Variable group mappings via release...' -CurrentOperation $relDef.Name -PercentComplete (($counter / $releaseDefnsObj.count) * 100)
+                    $counter++
+                    Write-Progress -Activity 'Variable group mappings via release...' -CurrentOperation $relDef.Name -PercentComplete (($counter / $releaseDefnsObj.count) * 100)
 
-                try
-                {
-                    $releaseObj = [WebRequestHelper]::InvokeGetWebRequest($relDef.url);
-                    $varGrps = @();
-                    
-                    #add var groups scoped at release scope.
-                    if((($releaseObj[0].variableGroups) | Measure-Object).Count -gt 0)
+                    try
                     {
-                        $varGrps += $releaseObj[0].variableGroups
-                    }
-
-                    #get var grps from each env of release pipeline
-                    foreach ($env in $releaseObj[0].environments) {
-                        if((($env.variableGroups) | Measure-Object).Count -gt 0)
+                        $releaseObj = [WebRequestHelper]::InvokeGetWebRequest($relDef.url);
+                        $varGrps = @();
+                        
+                        #add var groups scoped at release scope.
+                        if((($releaseObj[0].variableGroups) | Measure-Object).Count -gt 0)
                         {
-                            $varGrps += $env.variableGroups
+                            $varGrps += $releaseObj[0].variableGroups
                         }
-                    }
 
-                    if(($varGrps | Measure-Object).Count -gt 0)
-                    {
-                        $varGrps | ForEach-Object{
-                            $varGrpURL = ("https://{0}.visualstudio.com/{1}/_apis/distributedtask/variablegroups/{2}?api-version=6.1-preview.2") -f $this.OrgName, $this.projectId, $_;
-                            $varGrpObj = [WebRequestHelper]::InvokeGetWebRequest($varGrpURL);
+                        #get var grps from each env of release pipeline
+                        foreach ($env in $releaseObj[0].environments) {
+                            if((($env.variableGroups) | Measure-Object).Count -gt 0)
+                            {
+                                $varGrps += $env.variableGroups
+                            }
+                        }
 
-                            $releaseSTData = $this.ReleaseSTDetails.Data | Where-Object { ($_.releaseDefinitionID -eq $releaseObj[0].id) };
-                            if($releaseSTData){
-                                $variableGroupSTMapping.data += @([PSCustomObject] @{ variableGroupName = $varGrpObj.name; variableGroupID = $varGrpObj.id; serviceID = $releaseSTData.serviceID; projectName = $releaseSTData.projectName; projectID = $releaseSTData.projectID; orgName = $releaseSTData.orgName } )
+                        if(($varGrps | Measure-Object).Count -gt 0)
+                        {
+                            $varGrps | ForEach-Object{
+                                $varGrpURL = ("https://{0}.visualstudio.com/{1}/_apis/distributedtask/variablegroups/{2}?api-version=6.1-preview.2") -f $this.OrgName, $this.projectId, $_;
+                                $varGrpObj = [WebRequestHelper]::InvokeGetWebRequest($varGrpURL);
+
+                                $releaseSTData = $this.ReleaseSTDetails.Data | Where-Object { ($_.releaseDefinitionID -eq $releaseObj[0].id) };
+                                if($releaseSTData){
+                                    $variableGroupSTMapping.data += @([PSCustomObject] @{ variableGroupName = $varGrpObj.name; variableGroupID = $varGrpObj.id; serviceID = $releaseSTData.serviceID; projectName = $releaseSTData.projectName; projectID = $releaseSTData.projectID; orgName = $releaseSTData.orgName } )
+                                }
                             }
                         }
                     }
+                    Catch{
+                        #$this.PublishCustomMessage($_.Exception.Message)
+                    }
                 }
-                Catch{
-                    #$this.PublishCustomMessage($_.Exception.Message)
-                }
+                $releaseDefnsObj = $null;
             }
-            $releaseDefnsObj = $null;
+        }
+        catch {
+            #eat exception
         }
 
 
