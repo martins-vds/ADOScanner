@@ -20,38 +20,51 @@ class ContextHelper {
     {
         if( (-not [ContextHelper]::currentContext) -or $authNRefresh)
         {
-            $clientId = [Constants]::DefaultClientId ;          
-            $replyUri = [Constants]::DefaultReplyUri; 
+            $clientId = [Constants]::DefaultClientId ;
             $adoResourceId = [Constants]::DefaultADOResourceId;
-            [AuthenticationContext] $ctx = $null;
+            
+            [Microsoft.Identity.Client.AuthenticationResult] $result = $null;
 
-            $ctx = [AuthenticationContext]::new("https://login.windows.net/common");
-
-            [AuthenticationResult] $result = $null;
-
-            $azSKUI = $null;
             if(-not [string]::IsNullOrWhiteSpace($env:RefreshToken) -and -not [string]::IsNullOrWhiteSpace($env:ClientSecret)) { # this if block will be executed for OAuth based scan
                 $tokenInfo = [ContextHelper]::GetOAuthAccessToken()
                 [ContextHelper]::ConvertToContextObject($tokenInfo)
             }
-            else {
-                if ( !$authNRefresh -and ($azSKUI = Get-Variable 'AzSKADOLoginUI' -Scope Global -ErrorAction 'Ignore')) {
-                    if ($azSKUI.Value -eq 1) {
-                        $PromptBehavior = [Microsoft.IdentityModel.Clients.ActiveDirectory.PromptBehavior]::Always
-                        $PlatformParameters = New-Object Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters -ArgumentList $PromptBehavior
-                        $result = $ctx.AcquireTokenAsync($adoResourceId, $clientId, [Uri]::new($replyUri),$PlatformParameters).Result;
-                    }
-                    else {
-                        $PromptBehavior = [Microsoft.IdentityModel.Clients.ActiveDirectory.PromptBehavior]::Auto
-                        $PlatformParameters = New-Object Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters -ArgumentList $PromptBehavior
-                        $result = $ctx.AcquireTokenAsync($adoResourceId, $clientId, [Uri]::new($replyUri),$PlatformParameters).Result;
-                    }
-                }
-                else {
-                    $PromptBehavior = [Microsoft.IdentityModel.Clients.ActiveDirectory.PromptBehavior]::Auto
-                    $PlatformParameters = New-Object Microsoft.IdentityModel.Clients.ActiveDirectory.PlatformParameters -ArgumentList $PromptBehavior
-                    $result = $ctx.AcquireTokenAsync($adoResourceId, $clientId, [Uri]::new($replyUri),$PlatformParameters).Result;
-                }
+            else {                
+                   [string[]] $Scopes = "$($adoResourceId)/.default"
+                   $clientId = "8f0c9702-f91d-4ef6-afc6-9e5291b736c9"
+                   [uri] $RedirectUri = "http://localhost"
+                   #$clientId = "4f21ddbd-37b3-4abd-a3df-0402e242d4a1"
+                   #$tenantId = "72f988bf-86f1-41af-91ab-2d7cd011db47"
+                   $ClientApplicationBuilder = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($ClientId)
+                   [void] $ClientApplicationBuilder.WithRedirectUri($RedirectUri.AbsoluteUri)
+                   [Microsoft.Identity.Client.IPublicClientApplication]  $app = $ClientApplicationBuilder.Build()
+                   #[Microsoft.Identity.Client.IPublicClientApplication]  $app = [Microsoft.Identity.Client.PublicClientApplicationBuilder]::Create($ClientId).Build()
+                   [Microsoft.Identity.Client.IAccount] $Account =$app.GetAccountsAsync().GetAwaiter().GetResult()| Select-Object -First 1
+                                           
+                   $tokenSource = New-Object System.Threading.CancellationTokenSource
+                   $taskAuthenticationResult=$null                   
+                   if(-not($null -eq $Account))
+                   {
+                       $AquireTokenParameters = $app.AcquireTokenSilent($Scopes, $Account)
+                       $taskAuthenticationResult = $AquireTokenParameters.ExecuteAsync($tokenSource.Token)
+                       $tokenSource.Dispose()
+                   }
+                   else {
+                       # TODO BUG- Need to figure out tenant id 
+                      <# $TenantId = "72f988bf-86f1-41af-91ab-2d7cd011db47"
+                       $AquireTokenParameters = $app.AcquireTokenByIntegratedWindowsAuth($Scopes)
+                       #[void] $AquireTokenParameters.WithAuthority(('https://{0}' -f $app.AppConfig.AuthorityInfo.Host), $TenantId)
+                       $taskAuthenticationResult = $AquireTokenParameters.ExecuteAsync($tokenSource.Token)
+                       $tokenSource.Dispose()#>
+                   }
+                   #if($null -eq $taskAuthenticationResult.Result)
+                   #{
+                       $AquireTokenParameters = $app.AcquireTokenInteractive($Scopes)
+                       $taskAuthenticationResult = $AquireTokenParameters.ExecuteAsync($tokenSource.Token)
+                       $tokenSource.Dispose()                            
+                   #}   
+                   $result = $taskAuthenticationResult.Result
+                
 
                 [ContextHelper]::ConvertToContextObject($result)
             }
@@ -270,7 +283,7 @@ class ContextHelper {
             $contextObj.TokenExpireTimeLocal = $context.ExpiresOn
         }
         else {
-            $contextObj.Account.Id = $context.UserInfo.DisplayableId
+            $contextObj.Account.Id = $context.Account.Username 
             $contextObj.Tenant.Id = $context.TenantId
             $contextObj.AccessToken = $context.AccessToken
 
